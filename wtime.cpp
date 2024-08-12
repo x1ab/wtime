@@ -15,7 +15,7 @@ using namespace std; // You know, you're not _actually_ obliged to unconditional
                      // torture yourself all the time with C++! ;-p Also: it's MY code.
 
 
-string VERSION = "2.1.0";
+string VERSION = "2.2.0";
 
 
 //============================================================================
@@ -23,7 +23,7 @@ string VERSION = "2.1.0";
 //============================================================================
 struct CFG
 {
-	bool Time_In_Seconds = true; // or ms
+	string Report_Time_Unit = "s"; // "s", "ms", "min", "mins", or the full words in plural
 	bool Verbose = false;
 	bool Results_To_Stdout = false; // or stderr
 } cfg;
@@ -32,6 +32,56 @@ struct CFG
 //============================================================================
 // Lib...
 //============================================================================
+
+class Timer
+{
+	using time_point = std::chrono::time_point<std::chrono::high_resolution_clock>;
+	enum Control { Null, Start, Hold, Stop };
+	//If switching to enum class:
+	//using Control::Null, Control::Start, Control::Hold, Control::Stop;
+
+	string unit_;
+	time_point start_;
+	time_point stop_;
+	Control state_ = Null; // Reusing the control enums (relying on common sense)...
+
+	static auto read_()   { return chrono::high_resolution_clock::now(); }
+
+public:
+	Timer(string_view unit = "s") : unit_(unit) {}
+	Timer(Control ctrl = Null, string_view unit = "s") : unit_(unit) {
+		if (ctrl == Start) start();
+	}
+
+	auto start()   { start_ = read_(); state_ = Start; return start_; }
+	auto stop()    { stop_  = read_(); state_ = Stop;  return stop_; }
+	// Allow elapsed() to continue counting after a stop():
+	//auto restart() { state_ = Start; } // Not quite this simple!... :)
+	auto reset()   { state_ = Null; }
+
+	template <typename NumT = float>
+	NumT elapsed() { return state_ == Null ? 0
+		: elapsed<NumT>(start_, state_ == Stop ? stop_ : read_()); }
+
+	template <typename NumT = float>
+	NumT elapsed(time_point start_time, time_point stop_time)
+	{
+		NumT duration_s = std::chrono::duration<NumT>(stop_time - start_time).count();
+
+		NumT result;
+		if      (unit_ == "s" || unit_ == "seconds")
+				result = duration_s;
+		else if (unit_ == "ms" || unit_ == "milliseconds")
+				result = duration_s * 1000;
+		else if (unit_ == "min" || unit_ == "mins" || unit_ == "minutes")
+				result = duration_s / 60;
+		else {
+			cerr << "- Warning: unsupported time unit: \""<< unit_ <<"\"! Using seconds instead...\n";
+			result = duration_s;
+		}
+		return result;
+	}
+};
 
 //----------------------------------------------------------------------------
 class ConsoleCP // RAII wrapper around setting/restoring the console code-page
@@ -149,6 +199,8 @@ public:
 }; // class cmdline
 
 
+Timer reference_overhead_timer(Timer::Start);
+
 //============================================================================
 // Main...
 //============================================================================
@@ -183,6 +235,11 @@ Notes:
     etc.), honestly, call 911.
 
 )";
+
+		cerr	<< "(BTW, just for the fun of it: printing this took "
+			<< reference_overhead_timer.elapsed() * 1000
+			<< " milliseconds.)\n";
+
 		return -1;
 	}
 
@@ -196,17 +253,17 @@ Notes:
 
 	int child_exitcode; DWORD win32_error;
 
-	auto start = chrono::high_resolution_clock::now();
+	Timer timer(cfg.Report_Time_Unit);
+	timer.start();
 	bool result = run(cmdline, &child_exitcode, &win32_error);
-	auto stop  = chrono::high_resolution_clock::now();
+	timer.stop();
 
 	if (result)
 	{
-		auto d = chrono::duration<float>(stop - start);
-		float t = (cfg.Time_In_Seconds ? d.count() : chrono::duration_cast<chrono::milliseconds>(d).count());
-		auto  unit = cfg.Time_In_Seconds ? "s" : "ms";
-		
-		normal_out << "Elapsed time: " << t << ' ' << unit << '\n';
+		normal_out
+			<< "Elapsed time: " << timer.elapsed()
+			<< ' ' << cfg.Report_Time_Unit
+			<< '\n';
 
 		return child_exitcode;
 	}
