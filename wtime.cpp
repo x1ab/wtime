@@ -17,8 +17,10 @@ using namespace std; // You know, you're not _actually_ obliged to unconditional
 
 string VERSION = "2.1.0";
 
+
+//============================================================================
 // Config...
-//----------------------------------------------------------------------------
+//============================================================================
 struct CFG
 {
 	bool Time_In_Seconds = true; // or ms
@@ -26,9 +28,14 @@ struct CFG
 	bool Results_To_Stdout = false; // or stderr
 } cfg;
 
+
+//============================================================================
 // Lib...
+//============================================================================
+
 //----------------------------------------------------------------------------
-class ConsoleCP
+class ConsoleCP // RAII wrapper around setting/restoring the console code-page
+//----------------------------------------------------------------------------
 {
 	UINT originalCP;
 	UINT originalOutputCP;
@@ -47,10 +54,14 @@ public:
 	}
 };
 
+//----------------------------------------------------------------------------
 bool run(string_view cmdline, int* exitcode = nullptr, DWORD* w32_error = nullptr)
+//
 // Returns true if a new process for cmdline was successfully created,
 // regardless of whether the command itself succeeded or not.
 // Use the optional out args. to check the actual results.
+//
+//----------------------------------------------------------------------------
 {
 	if (cmdline.empty()) return false;
 
@@ -82,48 +93,65 @@ bool run(string_view cmdline, int* exitcode = nullptr, DWORD* w32_error = nullpt
 	return true;
 }
 
-string escape(const string& arg)
-// Written by Claude 3.5 Sonnet; NOT REVIEWED! Only tested with spaces.
-{
-	if (arg.find_first_of(" \t\n\v\"") == string::npos) {
-		return arg;
-	}
-
-	string escaped = "\"";
-	for (auto it = arg.begin(); ; ++it) {
-		unsigned backslashes = 0;
-		while (it != arg.end() && *it == '\\') {
-			++it;
-			++backslashes;
-		}
-
-		if (it == arg.end()) {
-			escaped.append(backslashes * 2, '\\');
-			break;
-		} else if (*it == '"') {
-			escaped.append(backslashes * 2 + 1, '\\');
-			escaped.push_back(*it);
-		} else {
-			escaped.append(backslashes, '\\');
-			escaped.push_back(*it);
-		}
-	}
-	escaped.push_back('"');
-	return escaped;
-}
-
-string build_cmdline(const vector<string>& args) {
-	string cmdline;
-	for (const auto& arg : args) {
-		if (!cmdline.empty()) cmdline += ' ';
-		cmdline += escape(arg);
-	}
-	return cmdline;
-}
-
-
-// Main...
 //----------------------------------------------------------------------------
+class CmdLine
+//----------------------------------------------------------------------------
+// Usage:
+//	string cmd = CmdLine(argv, argc).build();
+//	
+//!! Add this to Args!
+//----------------------------------------------------------------------------
+{
+	vector<string> args_;
+public:
+	CmdLine(char const* const* argv, int argc)
+		: args_(argv, argv + argc)
+	{}
+
+	static string escape(const string& arg)
+	// Written by Claude 3.5 Sonnet; NOT REVIEWED! Only tested with spaces.
+	{
+		if (arg.find_first_of(" \t\n\v\"") == string::npos) {
+			return arg;
+		}
+
+		string escaped = "\"";
+		for (auto it = arg.begin(); ; ++it) {
+			unsigned backslashes = 0;
+			while (it != arg.end() && *it == '\\') {
+				++it;
+				++backslashes;
+			}
+
+			if (it == arg.end()) {
+				escaped.append(backslashes * 2, '\\');
+				break;
+			} else if (*it == '"') {
+				escaped.append(backslashes * 2 + 1, '\\');
+				escaped.push_back(*it);
+			} else {
+				escaped.append(backslashes, '\\');
+				escaped.push_back(*it);
+			}
+		}
+		escaped.push_back('"');
+		return escaped;
+	}
+
+	string build() {
+		string cmdline;
+		for (const auto& arg : args_) {
+			if (!cmdline.empty()) cmdline += ' ';
+			cmdline += escape(arg);
+		}
+		return cmdline;
+	}
+}; // class cmdline
+
+
+//============================================================================
+// Main...
+//============================================================================
 int main(int argc, char* argv[], [[maybe_unused]] char* envp[])
 {
 	// Set the console to UTF-8 (to be restored on exit)
@@ -151,7 +179,7 @@ Notes:
     behavior on Windows; so no need for e.g. the mildly perverted triple-quote
     syntax with CMD, like `wtime busybox cat """one two.txt"""`).
 
-    For anything more complicated (like passing params with escaped quotes
+    For anything more complicated (like passing parameters with escaped quotes
     etc.), honestly, call 911.
 
 )";
@@ -163,8 +191,7 @@ Notes:
 
 	auto& normal_out = cfg.Results_To_Stdout ? cout : cerr;
 
-	//!! Add this feature to Args!...:
-	string cmdline = build_cmdline(vector<string>(argv, argv + argc));
+	string cmdline = CmdLine(argv, argc).build(); //!! Add this feature to Args!
 	if (cfg.Verbose) normal_out << "Executing: " << cmdline <<"...\n";
 
 	int child_exitcode; DWORD win32_error;
