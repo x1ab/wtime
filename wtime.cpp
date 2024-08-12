@@ -15,7 +15,7 @@ using namespace std; // You know, you're not _actually_ obliged to unconditional
                      // torture yourself all the time with C++! ;-p Also: it's MY code.
 
 
-string VERSION = "2.2.2";
+string VERSION = "2.2.3";
 
 
 //============================================================================
@@ -143,6 +143,19 @@ bool run(string_view cmdline, int* exitcode = nullptr, DWORD* w32_error = nullpt
 	return true;
 }
 
+
+//----------------------------------------------------------------------------
+// Detect if this is 32 or 64 bit build
+//----------------------------------------------------------------------------
+class Sys
+{
+public:
+	template <unsigned> static unsigned    BitArch();
+	template <>         static unsigned    BitArch<4u>() { return 32; }
+	template <>         static unsigned    BitArch<8u>() { return 64; }
+	static const char* BitArchTag()  { return BitArch<sizeof(size_t)>() == 32 ? "32" : "64"; }
+} sys;
+
 //----------------------------------------------------------------------------
 class CmdLine
 //----------------------------------------------------------------------------
@@ -215,7 +228,8 @@ int main(int argc, char* argv[], [[maybe_unused]] char* envp[])
 
 	if (argc < 2) {
 		cerr
-			<< args.exename() << " version " << VERSION << '\n'
+			<< args.exename() << " version " << VERSION
+			<< " (" << sys.BitArchTag() << "-bit)" << '\n'
 			<< '\n'
 			<< "Usage: " << args.exename() << " exename [args...]\n"
 			<< R"(
