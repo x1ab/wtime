@@ -1,13 +1,12 @@
-#ifndef _ARGS_HPP_
+#ifndef _ASDCVHF374Y192S84DTYBF87HY39486CVATY_
 
 #include <string>
 #include <vector>
 #include <map>
-#include <cstddef> // size_t
 #include <cassert>
 //#include <iostream> // cerr, for debugging
 
-class Args // Tiny cmdline processor 1.2.1 (-> github.com/xparq/Args)
+class Args // Tiny cmdline processor 1.2.2 (-> github.com/xparq/Args)
 {
 public:
 	enum {	Defaults = 0, // Invalid combinations are not checked!
@@ -53,11 +52,12 @@ public:
 
 	void clear() { named_args.clear(); positional_args.clear(); }
 
-	// Check if 'opt' was set:
+	// Check if "opt" was set:
 	bool operator[](const std::string& opt) const { return named().find(opt) != named().end(); }
-
-	// Return nth param. of an option (first (0th) by default), or "":
-	std::string operator()(const std::string& opt, size_t n = 0) const { return named().find(opt) == named().end()
+	// Get the nth positional arg, or "" if none:
+	std::string operator[](unsigned n) const { return positional().size() > n ? positional()[n] : ""; }
+	// Get the nth param. of "opt" (first (0th) by default), or "":
+	std::string operator()(const std::string& opt, unsigned n = 0) const { return named().find(opt) == named().end()
 	                                                            ? "" : (named().at(opt).size() <= n
 	                                                                   ? "" : named().at(opt)[n]); }
 
@@ -65,8 +65,8 @@ public:
 	      std::vector<std::string>& positional()       { return positional_args; }
 	const std::map<std::string, std::vector<std::string>>& named() const { return named_args; }
 	      std::map<std::string, std::vector<std::string>>& named()       { return named_args; }
-		// Pedantry: if you want to prevent casual named()[...] calls to add missing keys
-		// (std::map does that), use a const copy of the Args obj with op() and op[].
+		// Hint: to prevent casual named()[...] calls from silently adding
+		// missing keys (std::map does that!), use the Args obj. via a const ref!
 
 	// Remember: this is coming from the command that eventually launched the exe, so it
 	// could be "anything"... E.g. no guarantee that it ends with ".exe" on Windows etc.
@@ -82,7 +82,7 @@ public:
 	//! Enabling op bool would break args["opt"] due to a weird ambiguity, where the
 	//! compiler would suddenly think it may also match the builtin "opt"[int]! :-o
 	//! It's due to it trying a match with autoconverted bool->int before the "real thing".
-	//! The hacky workaround below may be good enough tho (but certainly not "good":
+	//! The hacky workaround below may be good enough though (but certainly not "good":
 	//! -> https://www.artima.com/articles/the-safe-bool-idiom)
 	//! Just comment it out, if you feel offended! ;)
 	operator const void*() const { return !(*this) ? nullptr : (void*)this; }
@@ -173,5 +173,5 @@ protected:
 	};
 };
 
-#define _ARGS_HPP_
-#endif
+#define _ASDCVHF374Y192S84DTYBF87HY39486CVATY_
+#endif//_ASDCVHF374Y192S84DTYBF87HY39486CVATY_

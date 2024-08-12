@@ -15,7 +15,7 @@ using namespace std; // You know, you're not _actually_ obliged to unconditional
                      // torture yourself all the time with C++! ;-p Also: it's MY code.
 
 
-string VERSION = "2.2.0";
+string VERSION = "2.2.2";
 
 
 //============================================================================
@@ -152,14 +152,9 @@ class CmdLine
 //!! Add this to Args!
 //----------------------------------------------------------------------------
 {
-	vector<string> args_;
 public:
-	CmdLine(char const* const* argv, int argc)
-		: args_(argv, argv + argc)
-	{}
-
-	static string escape(const string& arg)
-	// Written by Claude 3.5 Sonnet; NOT REVIEWED! Only tested with spaces.
+	static string escape_win32(const string& arg)
+	// Written by Claude 3.5 Sonnet; reviewed by ChatGPT 4o... Only tested with spaces!
 	{
 		if (arg.find_first_of(" \t\n\v\"") == string::npos) {
 			return arg;
@@ -188,22 +183,26 @@ public:
 		return escaped;
 	}
 
-	string build() {
+	static string build(char const* const* argv, int argc)
+	{
+		vector<string> args(argv, argv + argc);
 		string cmdline;
-		for (const auto& arg : args_) {
+		for (const auto& arg : args) {
 			if (!cmdline.empty()) cmdline += ' ';
-			cmdline += escape(arg);
+			cmdline += escape_win32(arg);
 		}
 		return cmdline;
 	}
 }; // class cmdline
 
 
-Timer reference_overhead_timer(Timer::Start);
-
 //============================================================================
 // Main...
 //============================================================================
+
+Timer bailout_timer(Timer::Start);
+auto& normal_out = cfg.Results_To_Stdout ? cout : cerr;
+
 int main(int argc, char* argv[], [[maybe_unused]] char* envp[])
 {
 	// Set the console to UTF-8 (to be restored on exit)
@@ -237,18 +236,15 @@ Notes:
 )";
 
 		cerr	<< "(BTW, just for the fun of it: printing this took "
-			<< reference_overhead_timer.elapsed() * 1000
+			<< bailout_timer.elapsed() * 1000
 			<< " milliseconds.)\n";
 
 		return -1;
 	}
 
 	++argv; --argc;
-	auto exe = argv[0];
+	string cmdline = CmdLine::build(argv, argc); //!! Add this feature to Args!
 
-	auto& normal_out = cfg.Results_To_Stdout ? cout : cerr;
-
-	string cmdline = CmdLine(argv, argc).build(); //!! Add this feature to Args!
 	if (cfg.Verbose) normal_out << "Executing: " << cmdline <<"...\n";
 
 	int child_exitcode; DWORD win32_error;
@@ -269,16 +265,19 @@ Notes:
 	}
 
 	// Errors...
-	cerr << "- Failed to run \""<< exe <<"\": ";
+	auto child_exe = args[0]; assert(!child_exe.empty());
+	cerr << "- Failed to run \""<< child_exe <<"\": ";
 	switch (win32_error)
 	{
 		case ERROR_PATH_NOT_FOUND:
 		case ERROR_FILE_NOT_FOUND: cerr << "path not found"; break;
 		case ERROR_ACCESS_DENIED: cerr << "access denied"; break;
-		case ERROR_BAD_FORMAT: cerr << exe <<"invalid file format"; break;
+		case ERROR_BAD_FORMAT: cerr << child_exe <<"invalid file format"; break;
 		case ERROR_NOT_ENOUGH_MEMORY:
 		case ERROR_OUTOFMEMORY: cerr << "not enough memory"; break;
 		default: cerr << "unknown error: " << win32_error << ")";
 	}
 	cerr << "!\n";
+
+	return -2;
 }
