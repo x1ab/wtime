@@ -1,3 +1,7 @@
+# Temporaries
+*.tmp
+.*
+
 # Prerequisites
 *.d
 
@@ -30,3 +34,8 @@
 *.exe
 *.out
 *.app
+
+# Debug/link cruft
+*.pdb
+*.ilk
+*.lib
