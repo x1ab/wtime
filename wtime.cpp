@@ -15,13 +15,16 @@ using namespace std; // You know, you're not _actually_ obliged to unconditional
                      // torture yourself all the time with C++! ;-p Also: it's MY code.
 
 
-string VERSION = "2.0.0";
+string VERSION = "2.1.0";
 
 // Config...
 //----------------------------------------------------------------------------
-	bool CFG_Time_In_Seconds = true; // else: ms
-	bool CFG_Verbose = true;
-
+struct CFG
+{
+	bool Time_In_Seconds = true; // or ms
+	bool Verbose = false;
+	bool Results_To_Stdout = false; // or stderr
+} cfg;
 
 // Lib...
 //----------------------------------------------------------------------------
@@ -158,9 +161,11 @@ Notes:
 	++argv; --argc;
 	auto exe = argv[0];
 
+	auto& normal_out = cfg.Results_To_Stdout ? cout : cerr;
+
 	//!! Add this feature to Args!...:
 	string cmdline = build_cmdline(vector<string>(argv, argv + argc));
-	if (CFG_Verbose) cerr << "Executing: " << cmdline <<"...\n";
+	if (cfg.Verbose) normal_out << "Executing: " << cmdline <<"...\n";
 
 	int child_exitcode; DWORD win32_error;
 
@@ -171,10 +176,10 @@ Notes:
 	if (result)
 	{
 		auto d = chrono::duration<float>(stop - start);
-		float t = (CFG_Time_In_Seconds ? d.count() : chrono::duration_cast<chrono::milliseconds>(d).count());
-		auto  unit = CFG_Time_In_Seconds ? "s" : "ms";
+		float t = (cfg.Time_In_Seconds ? d.count() : chrono::duration_cast<chrono::milliseconds>(d).count());
+		auto  unit = cfg.Time_In_Seconds ? "s" : "ms";
 		
-		cout << "Elapsed time: " << t << ' ' << unit << '\n';
+		normal_out << "Elapsed time: " << t << ' ' << unit << '\n';
 
 		return child_exitcode;
 	}
