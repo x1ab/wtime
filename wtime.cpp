@@ -15,7 +15,7 @@ using namespace std; // You know, you're not _actually_ obliged to unconditional
                      // torture yourself all the time with C++! ;-p Also: it's MY code.
 
 
-string VERSION = "2.2.3";
+string VERSION = "2.2.4";
 
 
 //============================================================================
@@ -23,9 +23,9 @@ string VERSION = "2.2.3";
 //============================================================================
 struct CFG
 {
-	string Report_Time_Unit = "s"; // "s", "ms", "min", "mins", or the full words in plural
-	bool Verbose = false;
-	bool Results_To_Stdout = false; // or stderr
+	string Report_Time_Unit  = "s"; // "s", "ms", "min", "mins", or the full words in plural
+	bool   Verbose           = false;
+	bool   Results_To_Stdout = false; // or stderr
 } cfg;
 
 
@@ -83,78 +83,79 @@ public:
 	}
 };
 
-//----------------------------------------------------------------------------
-class ConsoleCP // RAII wrapper around setting/restoring the console code-page
-//----------------------------------------------------------------------------
-{
-	UINT originalCP;
-	UINT originalOutputCP;
-
-public:
-	ConsoleCP(UINT newCP) {
-		originalCP = GetConsoleCP(); // input CP
-		originalOutputCP = GetConsoleOutputCP();
-		SetConsoleCP(newCP);
-		SetConsoleOutputCP(newCP);
-	}
-
-	~ConsoleCP() {
-		SetConsoleCP(originalCP);
-		SetConsoleOutputCP(originalOutputCP);
-	}
-};
 
 //----------------------------------------------------------------------------
-bool run(string_view cmdline, int* exitcode = nullptr, DWORD* w32_error = nullptr)
-//
-// Returns true if a new process for cmdline was successfully created,
-// regardless of whether the command itself succeeded or not.
-// Use the optional out args. to check the actual results.
-//
+namespace sys
 //----------------------------------------------------------------------------
 {
-	if (cmdline.empty()) return false;
+	//----------------------------------------------------------------------------
+	// Detect if this is 32 or 64 bit build
+	//----------------------------------------------------------------------------
+	template <unsigned> unsigned    BitArch();
+	template <>         unsigned    BitArch<4u>() { return 32; }
+	template <>         unsigned    BitArch<8u>() { return 64; }
+	inline const char* BitArchTag()  { return BitArch<sizeof(size_t)>() == 32 ? "32" : "64"; }
 
-	STARTUPINFOA si = {sizeof(si)};
-	PROCESS_INFORMATION pi;
+	//----------------------------------------------------------------------------
+	class ConsoleCP // RAII wrapper around setting/restoring the console code-page
+	//----------------------------------------------------------------------------
+	{
+		UINT originalCP;
+		UINT originalOutputCP;
 
-	string cmdline_writable(cmdline);
-	if (!CreateProcessA(NULL, &cmdline_writable[0], NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
-		auto lasterr = GetLastError();
-		if (w32_error) {
-			*w32_error = lasterr;
-		} else {
-			cerr << "- CreateProcess failed (LastError: " << lasterr << ")!" << endl;
+	public:
+		ConsoleCP(UINT newCP) {
+			originalCP = GetConsoleCP(); // input CP
+			originalOutputCP = GetConsoleOutputCP();
+			SetConsoleCP(newCP);
+			SetConsoleOutputCP(newCP);
 		}
-		return false;
+
+		~ConsoleCP() {
+			SetConsoleCP(originalCP);
+			SetConsoleOutputCP(originalOutputCP);
+		}
+	};
+
+	//----------------------------------------------------------------------------
+	static bool run(string_view cmdline, int* exitcode = nullptr, DWORD* w32_error = nullptr)
+	//
+	// Returns true if a new process for cmdline was successfully created,
+	// regardless of whether the command itself succeeded or not.
+	// Use the optional out args. to check the actual results.
+	//
+	//----------------------------------------------------------------------------
+	{
+		if (cmdline.empty()) return false;
+
+		STARTUPINFOA si = {sizeof(si)};
+		PROCESS_INFORMATION pi;
+
+		string cmdline_writable(cmdline);
+		if (!CreateProcessA(NULL, &cmdline_writable[0], NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+			auto lasterr = GetLastError();
+			if (w32_error) {
+				*w32_error = lasterr;
+			} else {
+				cerr << "- CreateProcess failed (LastError: " << lasterr << ")!" << endl;
+			}
+			return false;
+		}
+
+		WaitForSingleObject(pi.hProcess, INFINITE);
+
+		if (exitcode) {
+			DWORD w32_exitcode;
+			GetExitCodeProcess(pi.hProcess, &w32_exitcode);
+			*exitcode = (int)w32_exitcode;
+		}
+
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+
+		return true;
 	}
-
-	WaitForSingleObject(pi.hProcess, INFINITE);
-
-	if (exitcode) {
-		DWORD w32_exitcode;
-		GetExitCodeProcess(pi.hProcess, &w32_exitcode);
-		*exitcode = (int)w32_exitcode;
-	}
-
-	CloseHandle(pi.hProcess);
-	CloseHandle(pi.hThread);
-
-	return true;
-}
-
-
-//----------------------------------------------------------------------------
-// Detect if this is 32 or 64 bit build
-//----------------------------------------------------------------------------
-class Sys
-{
-public:
-	template <unsigned> static unsigned    BitArch();
-	template <>         static unsigned    BitArch<4u>() { return 32; }
-	template <>         static unsigned    BitArch<8u>() { return 64; }
-	static const char* BitArchTag()  { return BitArch<sizeof(size_t)>() == 32 ? "32" : "64"; }
-} sys;
+} // namespace sys
 
 //----------------------------------------------------------------------------
 class CmdLine
@@ -222,14 +223,14 @@ int main(int argc, char* argv[], [[maybe_unused]] char* envp[])
 	//!! Doesn't seem to help, though, in certain (common?) scenarios! :-/
 	//!! Eg. I can `echo ŐŰ` just fine directly, but passing that to `cmd /c`
 	//!! would still strip the accents, no matter what!... :-o
-	ConsoleCP set(CP_UTF8);
+	sys::ConsoleCP set(CP_UTF8);
 
 	Args args(argc, argv);
 
 	if (argc < 2) {
 		cerr
 			<< args.exename() << " version " << VERSION
-			<< " (" << sys.BitArchTag() << "-bit)" << '\n'
+			<< " (" << sys::BitArchTag() << "-bit)" << '\n'
 			<< '\n'
 			<< "Usage: " << args.exename() << " exename [args...]\n"
 			<< R"(
@@ -265,7 +266,7 @@ Notes:
 
 	Timer timer(cfg.Report_Time_Unit);
 	timer.start();
-	bool result = run(cmdline, &child_exitcode, &win32_error);
+	bool result = sys::run(cmdline, &child_exitcode, &win32_error);
 	timer.stop();
 
 	if (result)
