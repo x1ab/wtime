@@ -1,4 +1,4 @@
-#include "Args.hpp"
+//#include "Args.hpp" <- Disabled for playing with #3...
 
 #include <chrono>
 #include <iostream>
@@ -15,7 +15,8 @@ using namespace std; // You know, you're not _actually_ obliged to unconditional
                      // torture yourself all the time with C++! ;-p Also: it's MY code.
 
 
-string VERSION = "2.2.5";
+const char* TOOLNAME = "wtime";
+const char* VERSION = "2.2.6";
 
 
 //============================================================================
@@ -23,6 +24,7 @@ string VERSION = "2.2.5";
 //============================================================================
 struct CFG
 {
+
 	string Report_Time_Unit  = "s"; // "s", "ms", "min", "mins", or the full words in plural
 	bool   Verbose           = false;
 	bool   Results_To_Stdout = false; // or stderr
@@ -225,15 +227,15 @@ int main(int argc, char* argv[], [[maybe_unused]] char* envp[])
 	//!! would still strip the accents, no matter what!... :-o
 	sys::ConsoleCP set(CP_UTF8);
 
-	Args args(argc, argv);
+//	Args args(argc, argv);
 
 	if (argc < 2) {
 		cerr
-			<< args.exename() << " version " << VERSION
+			<< TOOLNAME << " version " << VERSION
 			<< " (" << sys::BitArchTag() << "-bit)"
 			<< " -> https://github.com/x1ab/wtime"
 			<< '\n'
-			<< "Usage: " << args.exename() << " exename [args...]\n"
+			<< "Usage: " << TOOLNAME << " exename [args...]\n"
 			<< R"(
 Notes:
 
@@ -287,7 +289,7 @@ Notes:
 	}
 
 	// Errors...
-	auto child_exe = args[0]; assert(!child_exe.empty());
+	auto child_exe = argv[0]; assert(child_exe && *child_exe); //!! with string: assert(!child_exe.empty());
 	cerr << "- Failed to run \""<< child_exe <<"\": ";
 	switch (win32_error)
 	{
