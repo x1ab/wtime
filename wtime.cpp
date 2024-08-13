@@ -15,7 +15,7 @@ using namespace std; // You know, you're not _actually_ obliged to unconditional
                      // torture yourself all the time with C++! ;-p Also: it's MY code.
 
 
-string VERSION = "2.2.4";
+string VERSION = "2.2.5";
 
 
 //============================================================================
@@ -230,23 +230,30 @@ int main(int argc, char* argv[], [[maybe_unused]] char* envp[])
 	if (argc < 2) {
 		cerr
 			<< args.exename() << " version " << VERSION
-			<< " (" << sys::BitArchTag() << "-bit)" << '\n'
+			<< " (" << sys::BitArchTag() << "-bit)"
+			<< " -> https://github.com/x1ab/wtime"
 			<< '\n'
 			<< "Usage: " << args.exename() << " exename [args...]\n"
 			<< R"(
 Notes:
 
   - `exename` must be a standalone executable. (Shell built-ins can be run
-    via explicit shell commands, like: `wtime cmd /c echo OK`.)
+    with explicit shell commands like: `wtime cmd /c echo OK`.)
 
-  - Wildcards are not expanded.
-  
+    Batch files can be run directly (well, obviously still invoking CMD for
+    them), as long as their .cmd or .bat extension is included in `exename`.
+    (OTOH, the .exe suffix of binaries can, of course, be omitted. Not .com,
+    though, similar to batch files, AFAIK.)
+
   - Quotes around parameters with spaces will be preserved. (Unlike the default
     behavior on Windows; so no need for e.g. the mildly perverted triple-quote
     syntax with CMD, like `wtime busybox cat """one two.txt"""`).
 
-    For anything more complicated (like passing parameters with escaped quotes
-    etc.), honestly, call 911.
+    There's also support for quoting (and honoring) escaped special chars using
+    Win32's \ syntax (not the ^ syntax of CMD, sorry!), but for anything more
+    complex, or if you find yourself stuck fighting this, honestly, call 911.
+
+  - Wildcards are not expanded.
 
 )";
 
@@ -287,7 +294,10 @@ Notes:
 		case ERROR_PATH_NOT_FOUND:
 		case ERROR_FILE_NOT_FOUND: cerr << "path not found"; break;
 		case ERROR_ACCESS_DENIED: cerr << "access denied"; break;
-		case ERROR_BAD_FORMAT: cerr << child_exe <<"invalid file format"; break;
+		case ERROR_INVALID_EXE_SIGNATURE:
+		case ERROR_EXE_MARKED_INVALID:
+		case ERROR_BAD_EXE_FORMAT:
+		case ERROR_BAD_FORMAT: cerr << child_exe <<"invalid file type/format"; break;
 		case ERROR_NOT_ENOUGH_MEMORY:
 		case ERROR_OUTOFMEMORY: cerr << "not enough memory"; break;
 		default: cerr << "unknown error: " << win32_error << ")";
