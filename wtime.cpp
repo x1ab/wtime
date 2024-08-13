@@ -4,7 +4,9 @@
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <cctype> // tolower
 #include <vector>
+//#include <algorithm> // transform, any_of
 #include <cassert>
 
 #define WIN32_LEAN_AND_MEAN
@@ -16,7 +18,7 @@ using namespace std; // You know, you're not _actually_ obliged to unconditional
 
 
 const char* TOOLNAME = "wtime";
-const char* VERSION = "2.2.6";
+const char* VERSION = "2.3.0";
 
 
 //============================================================================
@@ -169,6 +171,8 @@ class CmdLine
 //----------------------------------------------------------------------------
 {
 public:
+	static string quote(const string& arg) { return escape_win32(arg); } //!! Quote AND escape then, actually...
+
 	static string escape_win32(const string& arg)
 	// Written by Claude 3.5 Sonnet; reviewed by ChatGPT 4o... Only tested with spaces!
 	{
@@ -243,9 +247,8 @@ Notes:
     with explicit shell commands like: `wtime cmd /c echo OK`.)
 
     Batch files can be run directly (well, obviously still invoking CMD for
-    them), as long as their .cmd or .bat extension is included in `exename`.
-    (OTOH, the .exe suffix of binaries can, of course, be omitted. Not .com,
-    though, similar to batch files, AFAIK.)
+    them). The .cmd or .bat extension can be omitted, just like the .exe
+    (or .com) of real binaries.
 
   - Quotes around parameters with spaces will be preserved. (Unlike the default
     behavior on Windows; so no need for e.g. the mildly perverted triple-quote
@@ -266,20 +269,47 @@ Notes:
 		return -1;
 	}
 
-	++argv; --argc;
-	string cmdline = CmdLine::build(argv, argc); //!! Add this feature to Args!
+	++argv; --argc; //!! shift
 
-	if (cfg.Verbose) normal_out << "Executing: " << cmdline <<"...\n";
+	// Save with the original case for reporting:
+	const string child_exe_original_case = argv[0]; assert(!child_exe_original.empty());
+	// ...and convert to lowercase for later processing (yeah, without std::transform...):
+	string child_exe_original_tmp = child_exe_original_case;
+	for (char& c : child_exe_original_tmp)
+		c = (char)std::tolower((unsigned char)c); //! For that sad casts: -> https://en.cppreference.com/w/cpp/string/byte/tolower
+	const string child_exe_original = child_exe_original_tmp;
+
+	string child_exe_escaped = CmdLine::quote(child_exe_original); assert(!child_exe_escaped.empty());
+		// Need to manually escape the exe name. (Arg lists from CmdLine::build are escaped implicitly!)
+	++argv; --argc; //!! shift
+	string child_args = CmdLine::build(argv, argc); //!! Add this feature to Args!
 
 	int child_exitcode; DWORD win32_error;
-
 	Timer timer(cfg.Report_Time_Unit);
+
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	// Retry support to amend the shortomings of run() (i.e. CreateProcess) -> #2...
+	// Only an omitted ".exe" would be covered transparently by run.
+	//!! Not adding the retry feature directly to run itself, to keep the timing closer to a clean run.
+	//!! Quick measurements with explicit paths showed no difference, but repeated PATH lookups might!
+	const string retry_with[] = {".com", ".bat", ".cmd"}; // REVERSE order of preference!
+	auto retry = child_exe_original.ends_with(".exe") ? // Don't retry if it's an .exe!
+	                0 : sizeof(retry_with)/sizeof(decltype(retry_with[0]));
+	// Also don't retry if already has any of those extensions, or .exe:
+	for (const auto& ext : retry_with)
+		if (child_exe_original.ends_with(ext))
+			retry = 0;
+do_try:
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+	string cmdline = child_exe_escaped + " " + child_args;
+	if (cfg.Verbose) normal_out << "Executing: " << cmdline <<"...\n";
+
 	timer.start();
-	bool result = sys::run(cmdline, &child_exitcode, &win32_error);
+	bool run_succeeded = sys::run(cmdline, &child_exitcode, &win32_error);
 	timer.stop();
 
-	if (result)
-	{
+	if (run_succeeded) {
 		normal_out
 			<< "Elapsed time: " << timer.elapsed()
 			<< ' ' << cfg.Report_Time_Unit
@@ -289,17 +319,28 @@ Notes:
 	}
 
 	// Errors...
-	auto child_exe = argv[0]; assert(child_exe && *child_exe); //!! with string: assert(!child_exe.empty());
-	cerr << "- Failed to run \""<< child_exe <<"\": ";
-	switch (win32_error)
-	{
-		case ERROR_PATH_NOT_FOUND:
-		case ERROR_FILE_NOT_FOUND: cerr << "path not found"; break;
+
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	// Rertry with default extensions if not found?
+	if (win32_error == ERROR_FILE_NOT_FOUND && retry) {
+		--retry;
+		// Append the next missing ext. for a(nother) try:
+		child_exe_escaped = CmdLine::quote(child_exe_original + retry_with[retry]);
+		goto do_try;
+	}
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+	// Report the error
+	cerr << "- Failed to run \""<< child_exe_original_case <<"\": ";
+	switch (win32_error) {
+		case ERROR_FILE_NOT_FOUND: cerr << "file not found"; break;
+		case ERROR_PATH_NOT_FOUND: cerr << "path not found"; break;
 		case ERROR_ACCESS_DENIED: cerr << "access denied"; break;
 		case ERROR_INVALID_EXE_SIGNATURE:
 		case ERROR_EXE_MARKED_INVALID:
 		case ERROR_BAD_EXE_FORMAT:
-		case ERROR_BAD_FORMAT: cerr << child_exe <<"invalid file type/format"; break;
+		case ERROR_EXE_MACHINE_TYPE_MISMATCH:
+		case ERROR_BAD_FORMAT: cerr << "invalid file type/format"; break;
 		case ERROR_NOT_ENOUGH_MEMORY:
 		case ERROR_OUTOFMEMORY: cerr << "not enough memory"; break;
 		default: cerr << "unknown error: " << win32_error << ")";

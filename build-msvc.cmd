@@ -1,1 +1,1 @@
-cl /nologo /std:c++17 /EHsc /MT /W4 /Os wtime.cpp
+cl /nologo /std:c++20 /EHsc /MT /W4 /Os /DNDEBUG wtime.cpp
