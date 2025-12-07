@@ -1,4 +1,4 @@
-Simple timing wrapper for Windows executables (similar to UNIX `time`)
+Simple timing wrapper for Windows executables (vaguely similar to UNIX `time`)
 
 Usage:
 

@@ -13,12 +13,11 @@
 #include <Windows.h>
 
 
-using namespace std; // You know, you're not _actually_ obliged to unconditionally
-                     // torture yourself all the time with C++! ;-p Also: it's MY code.
+using namespace std; // Hey, you there, twitching! It's my code, okay?
 
 
 const char* TOOLNAME = "wtime";
-const char* VERSION = "2.3.0";
+const char* VERSION = "2.3.1";
 
 
 //============================================================================
@@ -252,7 +251,7 @@ Notes:
 
   - Quotes around parameters with spaces will be preserved. (Unlike the default
     behavior on Windows; so no need for e.g. the mildly perverted triple-quote
-    syntax with CMD, like `wtime busybox cat """one two.txt"""`).
+    syntax with CMD, like `wtime busybox cat """one two.txt"""`.)
 
     There's also support for quoting (and honoring) escaped special chars using
     Win32's \ syntax (not the ^ syntax of CMD, sorry!), but for anything more

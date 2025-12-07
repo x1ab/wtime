@@ -1,1 +1,1 @@
-﻿(Placeholder for proper regression testing.)
+﻿(No automated regression testing yet, sorry!)
